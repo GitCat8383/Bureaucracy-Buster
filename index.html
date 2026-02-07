@@ -93,6 +93,24 @@
       ::selection {
         background: rgba(14, 165, 233, 0.3); /* brand-500 with opacity */
       }
+
+      /* Form Input Overlay */
+      .pdf-input {
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px dashed #0284c7;
+        color: #0f172a;
+        padding: 2px 4px;
+        font-family: 'Courier New', Courier, monospace;
+        font-weight: bold;
+        outline: none;
+        transition: all 0.2s;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      }
+      .pdf-input:focus {
+        background: white;
+        border: 1px solid #0284c7;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
     </style>
   <script type="importmap">
 {
@@ -102,7 +120,8 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.0.379",
-    "pdfjs-dist/": "https://esm.sh/pdfjs-dist@4.0.379/"
+    "pdfjs-dist/": "https://esm.sh/pdfjs-dist@4.0.379/",
+    "pdf-lib": "https://esm.sh/pdf-lib@1.17.1"
   }
 }
 </script>

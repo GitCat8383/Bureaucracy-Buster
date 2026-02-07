@@ -4,8 +4,8 @@ import DocumentViewer from './components/DocumentViewer';
 import AssistantPanel from './components/AssistantPanel';
 import Spinner from './components/Spinner';
 import { analyzeDocument, simplifyText } from './services/geminiService';
-import { extractTextFromPdf } from './services/pdfService';
-import { AnalysisStatus, DocumentAnalysis, FileData, Explanation } from './types';
+import { extractTextFromPdf, saveFilledPdf } from './services/pdfService';
+import { AnalysisStatus, DocumentAnalysis, FileData, Explanation, Annotation } from './types';
 import { RefreshIcon } from './constants';
 
 const App: React.FC = () => {
@@ -14,10 +14,15 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<AnalysisStatus>(AnalysisStatus.IDLE);
   const [currentExplanation, setCurrentExplanation] = useState<Explanation | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  
+  // Annotation State
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
   const handleFileSelect = async (file: FileData) => {
     setFileData(file);
     setStatus(AnalysisStatus.ANALYZING);
+    setAnnotations([]); // Reset annotations for new file
+    
     try {
       let textContent = '';
       
@@ -76,6 +81,43 @@ const App: React.FC = () => {
     setAnalysis(null);
     setStatus(AnalysisStatus.IDLE);
     setCurrentExplanation(null);
+    setAnnotations([]);
+  };
+
+  // Annotation Handlers
+  const handleAddAnnotation = (a: Annotation) => {
+    setAnnotations(prev => [...prev, a]);
+  };
+
+  const handleUpdateAnnotation = (id: string, text: string) => {
+    setAnnotations(prev => prev.map(a => a.id === id ? { ...a, text } : a));
+  };
+
+  const handleRemoveAnnotation = (id: string) => {
+    setAnnotations(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleDownload = async () => {
+    if (!fileData || !fileData.isPdf || !(fileData.content instanceof ArrayBuffer)) return;
+
+    try {
+        const bufferCopy = fileData.content.slice(0);
+        const pdfBytes = await saveFilledPdf(bufferCopy, annotations);
+        
+        // Create Blob and trigger download
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `filled_${fileData.name}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error("Failed to save PDF", error);
+        alert("Failed to generate download. Please try again.");
+    }
   };
 
   return (
@@ -133,6 +175,11 @@ const App: React.FC = () => {
                 currentExplanation={currentExplanation}
                 isExplaining={isExplaining}
                 onClearExplanation={() => setCurrentExplanation(null)}
+                annotations={annotations}
+                onAddAnnotation={handleAddAnnotation}
+                onUpdateAnnotation={handleUpdateAnnotation}
+                onRemoveAnnotation={handleRemoveAnnotation}
+                onDownload={handleDownload}
               />
             </div>
 

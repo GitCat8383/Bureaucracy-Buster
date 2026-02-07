@@ -25,3 +25,12 @@ export interface FileData {
   isImage: boolean;
   isPdf?: boolean;
 }
+
+export interface Annotation {
+  id: string;
+  page: number; // 1-based index
+  x: number; // relative to page width (pixels at scale 1)
+  y: number; // relative to page height (pixels at scale 1)
+  text: string;
+  width?: number;
+}

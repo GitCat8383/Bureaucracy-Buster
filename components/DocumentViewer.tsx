@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { DocumentIcon, SparklesIcon, CloseIcon } from '../constants';
-import { Explanation } from '../types';
+import { Explanation, Annotation } from '../types';
 import PdfRenderer from './PdfRenderer';
 
 interface DocumentViewerProps {
@@ -11,6 +11,11 @@ interface DocumentViewerProps {
   currentExplanation: Explanation | null;
   isExplaining: boolean;
   onClearExplanation: () => void;
+  annotations: Annotation[];
+  onAddAnnotation: (a: Annotation) => void;
+  onUpdateAnnotation: (id: string, text: string) => void;
+  onRemoveAnnotation: (id: string) => void;
+  onDownload: () => void;
 }
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ 
@@ -20,7 +25,12 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   onTextSelected,
   currentExplanation,
   isExplaining,
-  onClearExplanation
+  onClearExplanation,
+  annotations,
+  onAddAnnotation,
+  onUpdateAnnotation,
+  onRemoveAnnotation,
+  onDownload
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [selectionTooltip, setSelectionTooltip] = useState<{ x: number, y: number, show: boolean } | null>(null);
@@ -32,9 +42,16 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     const handleSelection = () => {
       const selection = window.getSelection();
       
+      // Basic check: is selection inside contentRef?
       if (!selection || selection.isCollapsed || !contentRef.current?.contains(selection.anchorNode)) {
         setSelectionTooltip(null);
         return;
+      }
+      
+      // Also ignore if selection is inside an input field (user editing text)
+      if (selection.anchorNode && (selection.anchorNode as HTMLElement).nodeName === 'INPUT') {
+          setSelectionTooltip(null);
+          return;
       }
 
       const text = selection.toString().trim();
@@ -42,6 +59,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
         setSelectionTooltip(null);
         return;
       }
+
+      // Ensure we have a valid range to position tooltip
+      if (selection.rangeCount === 0) return;
 
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
@@ -65,7 +85,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       contentRef.current?.removeEventListener('mouseup', handleMouseUp);
       contentRef.current?.removeEventListener('keyup', handleKeyUp);
     };
-  }, []); // Run once on mount
+  }, []);
 
   const handleSimplifyClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -107,10 +127,32 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50 rounded-t-xl shrink-0">
         <div className="flex items-center">
           <DocumentIcon />
-          <h2 className="ml-3 font-semibold text-slate-700 truncate max-w-[200px]">{title}</h2>
+          <h2 className="ml-3 font-semibold text-slate-700 truncate max-w-[180px]">{title}</h2>
+        </div>
+        
+        {/* Toolbar */}
+        <div className="flex items-center space-x-2">
+            {isPdf && (
+                 <button 
+                    onClick={onDownload}
+                    className="flex items-center px-3 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-md hover:bg-brand-700 transition-colors shadow-sm"
+                 >
+                    <span className="hidden sm:inline">Download PDF</span>
+                    <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </button>
+            )}
         </div>
       </div>
       
+      {/* Helper Banner */}
+      {isPdf && (
+        <div className="bg-brand-50 border-b border-brand-100 px-4 py-2 text-xs text-brand-700 text-center font-medium flex justify-center gap-4">
+            <span>✨ Select text to Explain</span>
+            <span className="text-brand-300">|</span>
+            <span>🖱️ Double-click to Add Text</span>
+        </div>
+      )}
+
       <div className="relative flex-1 overflow-hidden" ref={contentRef}>
         {isPdf ? (
             <div className="h-full overflow-auto bg-slate-200 scroll-smooth">
@@ -133,7 +175,14 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
                     </div>
                 </div>
 
-                <PdfRenderer pdfData={content as ArrayBuffer} scale={scale} />
+                <PdfRenderer 
+                    pdfData={content as ArrayBuffer} 
+                    scale={scale} 
+                    annotations={annotations}
+                    onAddAnnotation={onAddAnnotation}
+                    onUpdateAnnotation={onUpdateAnnotation}
+                    onRemoveAnnotation={onRemoveAnnotation}
+                />
             </div>
         ) : (
             <div className="h-full overflow-auto p-6 md:p-8 bg-white">
