@@ -1,0 +1,5 @@
+{
+  "name": "Bureaucracy Buster",
+  "description": "An intelligent assistant that simplifies complex government forms and legal documents into plain English using Gemini.",
+  "requestFramePermissions": []
+}
