@@ -5,7 +5,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 export const analyzeDocument = async (
   fileContent: string, 
   isImage: boolean, 
-  mimeType: string = 'text/plain'
+  mimeType: string = 'text/plain',
+  targetLanguage: string = 'English'
 ): Promise<DocumentAnalysis> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/analyze`, {
@@ -15,6 +16,7 @@ export const analyzeDocument = async (
         content: fileContent,
         is_image: isImage,
         mime_type: mimeType,
+        target_language: targetLanguage,
       }),
     });
 
@@ -31,8 +33,9 @@ export const analyzeDocument = async (
 
 export const simplifyText = async (
   selectedText: string, 
-  analysis: DocumentAnalysis
-): Promise<{ explanation: string, keyTerms: string[] }> => {
+  analysis: DocumentAnalysis,
+  targetLanguage: string = 'English'
+): Promise<{ explanation: string, keyTerms: string[], translatedText: string, translatedLanguage: string }> => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/simplify`, {
       method: "POST",
@@ -40,6 +43,7 @@ export const simplifyText = async (
       body: JSON.stringify({
         selected_text: selectedText,
         analysis,
+        target_language: targetLanguage,
       }),
     });
 
@@ -52,7 +56,9 @@ export const simplifyText = async (
     console.error("Simplification Error:", error);
     return {
       explanation: "We couldn't simplify this text right now. It might be too fragmented.",
-      keyTerms: []
+      keyTerms: [],
+      translatedText: "",
+      translatedLanguage: targetLanguage
     };
   }
 };

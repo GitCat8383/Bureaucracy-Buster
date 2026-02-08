@@ -9,6 +9,14 @@ import { AnalysisStatus, DocumentAnalysis, FileData, Explanation, Annotation } f
 import { RefreshIcon } from './constants';
 
 const App: React.FC = () => {
+  const languageOptions = [
+    { label: 'English', value: 'English' },
+    { label: 'Spanish', value: 'Spanish' },
+    { label: 'French', value: 'French' },
+    { label: 'Vietnamese', value: 'Vietnamese' },
+  ];
+
+  const [targetLanguage, setTargetLanguage] = useState(languageOptions[0].value);
   const [fileData, setFileData] = useState<FileData | null>(null);
   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null);
   const [status, setStatus] = useState<AnalysisStatus>(AnalysisStatus.IDLE);
@@ -18,38 +26,42 @@ const App: React.FC = () => {
   // Annotation State
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
-  const handleFileSelect = async (file: FileData) => {
-    setFileData(file);
+  const runAnalysis = async (file: FileData, language: string, overrideText?: string) => {
     setStatus(AnalysisStatus.ANALYZING);
-    setAnnotations([]); // Reset annotations for new file
+    setCurrentExplanation(null);
     
     try {
-      let textContent = '';
-      
-      if (file.isPdf && file.content instanceof ArrayBuffer) {
-        // Extract text from PDF using PDF.js before sending to Gemini
+      let textContent = overrideText || '';
+      let isImageForGemini = file.isImage;
+      let contentForGemini = '';
+      let mimeType = file.type;
+
+      if (textContent) {
+        isImageForGemini = false;
+        contentForGemini = textContent;
+        mimeType = 'text/plain';
+      } else if (file.isPdf && file.content instanceof ArrayBuffer) {
         try {
-            // Clone the buffer because PDF.js might transfer ownership (detach it)
-            // preventing the renderer from using it later.
-            const bufferClone = file.content.slice(0);
-            textContent = await extractTextFromPdf(bufferClone);
+          const bufferClone = file.content.slice(0);
+          textContent = await extractTextFromPdf(bufferClone);
+          contentForGemini = textContent;
+          isImageForGemini = false;
+          mimeType = 'text/plain';
         } catch (e) {
-            console.error("PDF Extraction failed", e);
-            throw new Error("Could not read PDF text.");
+          console.error("PDF Extraction failed", e);
+          throw new Error("Could not read PDF text.");
         }
       } else if (typeof file.content === 'string') {
         textContent = file.content;
+        contentForGemini = file.content;
+      } else {
+        throw new Error("Unsupported file content.");
       }
 
-      // Now we have text, send to Gemini
-      const isImageForGemini = file.isImage; 
-      const contentForGemini = file.isPdf ? textContent : (file.content as string);
-
-      const result = await analyzeDocument(contentForGemini, isImageForGemini, file.type);
+      const result = await analyzeDocument(contentForGemini, isImageForGemini, mimeType, language);
       
-      // Update result with transcribed text if it was empty (e.g. from PDF extraction)
-      if (file.isPdf && !result.transcribedText) {
-          result.transcribedText = textContent;
+      if (!result.transcribedText && textContent) {
+        result.transcribedText = textContent;
       }
       
       setAnalysis(result);
@@ -61,16 +73,24 @@ const App: React.FC = () => {
     }
   };
 
+  const handleFileSelect = async (file: FileData) => {
+    setFileData(file);
+    setAnnotations([]); // Reset annotations for new file
+    await runAnalysis(file, targetLanguage);
+  };
+
   const handleTextSelection = async (text: string) => {
     if (!analysis) return;
     
     setIsExplaining(true);
     setCurrentExplanation(null); 
 
-    const result = await simplifyText(text, analysis);
+    const result = await simplifyText(text, analysis, targetLanguage);
     setCurrentExplanation({
         originalText: text,
         simplifiedText: result.explanation,
+        translatedText: result.translatedText,
+        translatedLanguage: result.translatedLanguage,
         ...result
     });
     setIsExplaining(false);
@@ -129,15 +149,37 @@ const App: React.FC = () => {
             <div className="bg-brand-600 w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-lg">B</div>
             <h1 className="text-xl font-bold text-slate-800 tracking-tight">Bureaucracy Buster</h1>
           </div>
-          {status === AnalysisStatus.COMPLETE && (
-            <button 
-              onClick={resetApp}
-              className="flex items-center space-x-1 text-sm font-medium text-slate-500 hover:text-brand-600 transition-colors"
-            >
-              <RefreshIcon />
-              <span>Start Over</span>
-            </button>
-          )}
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Language</label>
+              <select
+                value={targetLanguage}
+                onChange={async (e) => {
+                  const nextLanguage = e.target.value;
+                  setTargetLanguage(nextLanguage);
+                  if (fileData && analysis && status === AnalysisStatus.COMPLETE) {
+                    await runAnalysis(fileData, nextLanguage, analysis.transcribedText);
+                  }
+                }}
+                className="text-sm border border-slate-300 rounded-md px-2 py-1 bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              >
+                {languageOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {status === AnalysisStatus.COMPLETE && (
+              <button 
+                onClick={resetApp}
+                className="flex items-center space-x-1 text-sm font-medium text-slate-500 hover:text-brand-600 transition-colors"
+              >
+                <RefreshIcon />
+                <span>Start Over</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -180,6 +222,7 @@ const App: React.FC = () => {
                 onUpdateAnnotation={handleUpdateAnnotation}
                 onRemoveAnnotation={handleRemoveAnnotation}
                 onDownload={handleDownload}
+                targetLanguage={targetLanguage}
               />
             </div>
 
@@ -191,6 +234,7 @@ const App: React.FC = () => {
                   isLoadingExplanation={isExplaining}
                   onCloseExplanation={() => setCurrentExplanation(null)}
                   onManualSimplify={handleTextSelection}
+                  targetLanguage={targetLanguage}
                />
             </div>
 

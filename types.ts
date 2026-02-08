@@ -16,6 +16,8 @@ export interface Explanation {
   originalText: string;
   simplifiedText: string;
   keyTerms: string[];
+  translatedText?: string;
+  translatedLanguage?: string;
 }
 
 export interface FileData {

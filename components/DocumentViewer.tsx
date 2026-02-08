@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { DocumentIcon, SparklesIcon, CloseIcon } from '../constants';
 import { Explanation, Annotation } from '../types';
 import PdfRenderer from './PdfRenderer';
+import { fetchSpeech } from '../services/ttsService';
 
 interface DocumentViewerProps {
   title: string;
@@ -16,6 +17,7 @@ interface DocumentViewerProps {
   onUpdateAnnotation: (id: string, text: string) => void;
   onRemoveAnnotation: (id: string) => void;
   onDownload: () => void;
+  targetLanguage: string;
 }
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ 
@@ -30,12 +32,16 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   onAddAnnotation,
   onUpdateAnnotation,
   onRemoveAnnotation,
-  onDownload
+  onDownload,
+  targetLanguage
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [selectionTooltip, setSelectionTooltip] = useState<{ x: number, y: number, show: boolean } | null>(null);
   const [resultPopover, setResultPopover] = useState<{ x: number, y: number, show: boolean } | null>(null);
   const [scale, setScale] = useState(1.0);
+  const [isPlayingExplanationAudio, setIsPlayingExplanationAudio] = useState(false);
+  const [explanationAudioUrl, setExplanationAudioUrl] = useState<string | null>(null);
+  const explanationAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Handle Selection Logic
   useEffect(() => {
@@ -107,6 +113,39 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const handleClosePopover = () => {
     setResultPopover(null);
     onClearExplanation();
+  };
+
+  const handlePlayExplanation = async () => {
+    if (!currentExplanation?.simplifiedText?.trim()) return;
+    setIsPlayingExplanationAudio(true);
+    try {
+      const audioBlob = await fetchSpeech(currentExplanation.simplifiedText, targetLanguage);
+      if (explanationAudioUrl) {
+        URL.revokeObjectURL(explanationAudioUrl);
+      }
+      const url = URL.createObjectURL(audioBlob);
+      setExplanationAudioUrl(url);
+      if (explanationAudioRef.current) {
+        explanationAudioRef.current.src = url;
+        await explanationAudioRef.current.play();
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Failed to generate audio. Please try again.");
+    } finally {
+      setIsPlayingExplanationAudio(false);
+    }
+  };
+
+  const handleStopExplanation = () => {
+    if (explanationAudioRef.current) {
+      explanationAudioRef.current.pause();
+      explanationAudioRef.current.currentTime = 0;
+    }
+    if (explanationAudioUrl) {
+      URL.revokeObjectURL(explanationAudioUrl);
+      setExplanationAudioUrl(null);
+    }
   };
 
   // Close popover if clicking outside
@@ -230,13 +269,29 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <div className="bg-brand-50 px-4 py-3 flex items-center justify-between border-b border-brand-100">
             <div className="flex items-center text-brand-700 text-sm font-bold">
               <SparklesIcon />
-              <span className="ml-2">Plain English</span>
+              <span className="ml-2">Simplified ({targetLanguage})</span>
             </div>
-            {!isExplaining && (
-              <button onClick={handleClosePopover} className="text-brand-400 hover:text-brand-600 transition-colors">
-                <CloseIcon />
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handlePlayExplanation}
+                disabled={isExplaining || isPlayingExplanationAudio || !currentExplanation}
+                className="px-2.5 py-1 text-xs font-medium rounded-md bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPlayingExplanationAudio ? 'Generating…' : 'Play'}
               </button>
-            )}
+              <button
+                onClick={handleStopExplanation}
+                disabled={!explanationAudioUrl}
+                className="px-2.5 py-1 text-xs font-medium rounded-md border border-slate-300 text-slate-600 hover:text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Stop
+              </button>
+              {!isExplaining && (
+                <button onClick={handleClosePopover} className="text-brand-400 hover:text-brand-600 transition-colors">
+                  <CloseIcon />
+                </button>
+              )}
+            </div>
           </div>
           
           <div className="p-4 max-h-64 overflow-y-auto">
@@ -250,7 +305,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
                  <p className="text-slate-800 text-sm leading-relaxed font-medium">
                    {currentExplanation.simplifiedText}
                  </p>
-                 
                  {currentExplanation.keyTerms.length > 0 && (
                    <div className="pt-2 border-t border-slate-100">
                      <p className="text-xs font-bold text-slate-400 uppercase mb-2">Key Terms</p>
@@ -269,6 +323,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               <p className="text-sm text-red-500">Could not explain text.</p>
             )}
           </div>
+          <audio ref={explanationAudioRef} hidden />
         </div>
       )}
     </div>
