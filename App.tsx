@@ -67,7 +67,7 @@ const App: React.FC = () => {
     setIsExplaining(true);
     setCurrentExplanation(null); 
 
-    const result = await simplifyText(text, analysis.transcribedText);
+    const result = await simplifyText(text, analysis);
     setCurrentExplanation({
         originalText: text,
         simplifiedText: result.explanation,

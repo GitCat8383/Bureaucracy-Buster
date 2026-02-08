@@ -2,8 +2,11 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { Annotation } from '../types';
 
-// Configure worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+// Configure worker (match local pdfjs-dist version)
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 export const extractTextFromPdf = async (arrayBuffer: ArrayBuffer): Promise<string> => {
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
